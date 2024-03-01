@@ -45,10 +45,10 @@ Step 5: Update Screenshots Folder Path
 Before running the script, update the path to your screenshots folder in the screenspeak.py file. Modify line 17 to match your screenshots directory:
 
 ```python
-SCREENSHOT_DIR = "/mnt/c/Users/<YOUR USERNAME>/OneDrive/Pictures/Screenshots"
+screenspeak = ScreenSpeak("/mnt/c/Users/<YOUR USERNAME HERE>/OneDrive/Pictures/Screenshots")
 ```
 
-Replace <YOUR USERNAME> with your actual Windows username.
+Replace <YOUR USERNAME HERE> with your actual Windows username.
 
 Step 6: Run the Script
 Finally, run the ScreenSpeak script:
