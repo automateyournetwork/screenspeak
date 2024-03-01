@@ -57,4 +57,8 @@ Finally, run the ScreenSpeak script:
 python screenspeak.py
 ```
 
+Step 7: Take a screenshot 
+Once the script is running - you can press Windows-Key + PrintScreen; or use the SnippingTool; to take a screenshot 
+In a few seconds an MP3 will play over your speakers / headphones with an AI analysis and explaination of the screenshot that was taken. 
+
 Enjoy using ScreenSpeak!
