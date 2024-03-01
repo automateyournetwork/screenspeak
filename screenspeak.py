@@ -132,5 +132,5 @@ class ScreenSpeak:
 
 if __name__ == "__main__":
     load_dotenv()
-    screenspeak = ScreenSpeak("/mnt/c/Users/ptcap/OneDrive/Pictures/Screenshots")
+    screenspeak = ScreenSpeak("/mnt/c/Users/<YOUR USERNAME HERE>/OneDrive/Pictures/Screenshots")
     screenspeak.run()
