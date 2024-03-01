@@ -1,114 +1,136 @@
-from PIL import Image
 import io
 import os
 import time
 import base64
 import requests
 import subprocess
+from PIL import Image
+from openai import OpenAI
 from datetime import datetime
 from dotenv import load_dotenv
-from openai import OpenAI
 
-# Load environment variables
-load_dotenv()
+class ScreenSpeak:
+    """
+    ScreenSpeak continuously monitors a specified directory for new screenshots,
+    processes each new screenshot by generating a voice-over script using OpenAI's GPT model,
+    and then synthesizes speech from the script.
+    """
+    def __init__(self, screenshot_dir, voice_model="alloy", poll_interval=10):
+        """
+        Initializes the ScreenSpeak with the directory to monitor, voice model, and polling interval.
 
-# Configuration
-OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
-SCREENSHOT_DIR = "/mnt/c/Users/<YOUR USERNAME>/OneDrive/Pictures/Screenshots"  # Adjust to your path
-VOICE_MODEL = "alloy"
-POLL_INTERVAL = 10  # Time in seconds between checks
+        :param screenshot_dir: Directory to monitor for new screenshots.
+        :param voice_model: Voice model to use for speech synthesis.
+        :param poll_interval: Time in seconds between directory checks for new screenshots.
+        """
+        self.screenshot_dir = screenshot_dir
+        self.voice_model = voice_model
+        self.poll_interval = poll_interval
+        self.start_time = datetime.now().timestamp()
+        self.last_processed = None
+        self.client = OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
 
-# Initialize OpenAI client
-client = OpenAI(api_key=OPENAI_API_KEY)
+    def run(self):
+        """
+        Starts the monitoring and processing of new screenshots in the specified directory.
+        """
+        print(f"Monitoring for new screenshots in {self.screenshot_dir}...")
+        while True:
+            latest_screenshot = self._get_latest_screenshot()
+            if latest_screenshot and latest_screenshot != self.last_processed:
+                self._process_screenshot(latest_screenshot)
+                self.last_processed = latest_screenshot
+            time.sleep(self.poll_interval)
 
-def get_latest_screenshot(directory):
-    """Get the most recent screenshot file from the directory."""
-    png_files = [f for f in os.listdir(directory) if f.endswith('.png')]
-    if not png_files:
-        return None
-    latest_file = max(png_files, key=lambda x: os.path.getctime(os.path.join(directory, x)))
-    return os.path.join(directory, latest_file)
+    def _get_latest_screenshot(self):
+        """
+        Gets the most recent screenshot file from the directory, considering only files created after the script started.
 
-def process_screenshot(screenshot_path):
-    print(f"Processing screenshot: {screenshot_path}")
-    try:
-        # Open the screenshot and convert to JPEG
+        :return: The path to the latest screenshot file, or None if no new file is found.
+        """
+        png_files = [f for f in os.listdir(self.screenshot_dir) if f.endswith('.png')]
+        valid_files = [f for f in png_files if os.path.getctime(os.path.join(self.screenshot_dir, f)) > self.start_time]
+        if not valid_files:
+            return None
+        latest_file = max(valid_files, key=lambda x: os.path.getctime(os.path.join(self.screenshot_dir, x)))
+        return os.path.join(self.screenshot_dir, latest_file)
+
+    def _process_screenshot(self, screenshot_path):
+        """
+        Processes the screenshot: generates a voice-over script using OpenAI's GPT model, synthesizes speech,
+        and plays the generated audio.
+
+        :param screenshot_path: Path to the screenshot file to be processed.
+        """
+        print(f"Processing screenshot: {screenshot_path}")
+        try:
+            description = self._generate_script(screenshot_path)
+            audio_content = self._synthesize_speech(description)
+            if audio_content:
+                self._save_and_play_audio(audio_content)
+        except Exception as e:
+            print(f"Error processing screenshot: {e}")
+
+    def _generate_script(self, screenshot_path):
+        """
+        Generates a voice-over script for the screenshot using OpenAI's GPT model.
+
+        :param screenshot_path: Path to the screenshot file.
+        :return: Generated script as a string.
+        """
         with Image.open(screenshot_path) as img:
             img = img.convert("RGB")
-
-            # Convert the JPEG image to base64
             buffered = io.BytesIO()
-            img.save(buffered, format="JPEG", quality=85)  # Save as JPEG with good quality
+            img.save(buffered, format="JPEG", quality=85)
             base64_image = base64.b64encode(buffered.getvalue()).decode('utf-8')
-
-        # Generate script from the screenshot
-        description = generate_script(base64_image)
-
-        # Synthesize speech from the description
-        audio_content = synthesize_speech(description)
-
-        # Save the audio content to a file
-        if audio_content:
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            audio_filename = os.path.join("", f"audio_{timestamp}.mp3")  # Corrected to save in SCREENSHOT_DIR
-            with open(audio_filename, 'wb') as audio_file:
-                audio_file.write(audio_content)
-            print(f"Saved audio to {audio_filename}")
-
-            # Play the MP3 file
-            play_audio(audio_filename)
-    except Exception as e:
-        print(f"Error processing screenshot: {e}")
-
-def play_audio(audio_filename):
-    try:
-        subprocess.run(['mpg123', audio_filename], check=True)
-    except subprocess.CalledProcessError as e:
-        print(f"Error playing audio: {e}")
-
-# Function to generate voice-over script using OpenAI's GPT model
-def generate_script(base64_frame):
-    prompt_messages = [
-        {
+        
+        prompt_messages = [{
             "role": "user",
             "content": [
-                f"This is a screenshot. Based on the image please generate the text to describe what you see. Try your best.",
-                {"image": base64_frame, "resize": 768}
+                "This is a screenshot. Based on the image please generate the text to describe what you see. Try your best.",
+                {"image": base64_image, "resize": 768}
             ],
-        },
-    ]
+        }]
+        result = self.client.chat.completions.create(
+            model="gpt-4-vision-preview",
+            messages=prompt_messages,
+            max_tokens=500,
+        )
+        return result.choices[0].message.content
 
-    # Create the completion request
-    result = client.chat.completions.create(
-        model="gpt-4-vision-preview",
-        messages=prompt_messages,
-        max_tokens=500,
-    )
+    def _synthesize_speech(self, script):
+        """
+        Synthesizes speech from the provided script using the specified voice model.
 
-    return result.choices[0].message.content
+        :param script: Script to synthesize speech from.
+        :return: Binary content of the synthesized speech audio.
+        """
+        print("Synthesizing speech...")
+        response = requests.post(
+            "https://api.openai.com/v1/audio/speech",
+            headers={"Authorization": f"Bearer {os.getenv('OPENAI_API_KEY')}"},
+            json={"model": "tts-1-hd", "input": script, "voice": self.voice_model},
+        )
+        if response.ok:
+            return response.content
+        else:
+            print(f"Error with the audio generation request: {response.text}")
+            return None
 
-def synthesize_speech(script, voice=VOICE_MODEL):
-    print("Synthesizing speech...")
-    response = requests.post(
-        "https://api.openai.com/v1/audio/speech",
-        headers={"Authorization": f"Bearer {OPENAI_API_KEY}"},
-        json={"model": "tts-1-hd", "input": script, "voice": voice},
-    )
-    if response.ok:
-        return response.content
-    else:
-        print(f"Error with the audio generation request: {response.text}")
-        return None
+    def _save_and_play_audio(self, audio_content):
+        """
+        Saves the synthesized speech audio to a file and plays it.
 
-def main():
-    last_processed = None
-    print(f"Monitoring for new screenshots in {SCREENSHOT_DIR}...")
-    while True:
-        latest_screenshot = get_latest_screenshot(SCREENSHOT_DIR)
-        if latest_screenshot and latest_screenshot != last_processed:
-            process_screenshot(latest_screenshot)
-            last_processed = latest_screenshot
-        time.sleep(POLL_INTERVAL)
+        :param audio_content: Binary content of the synthesized speech audio.
+        """
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        audio_filename = f"audio_{timestamp}.mp3"
+        with open(audio_filename, 'wb') as audio_file:
+            audio_file.write(audio_content)
+        print(f"Saved audio to {audio_filename}")
+        subprocess.run(['mpg123', audio_filename], check=True)
 
 if __name__ == "__main__":
-    main()
+    load_dotenv()
+    screenspeak = ScreenSpeak("/mnt/c/Users/ptcap/OneDrive/Pictures/Screenshots")
+    screenspeak.run()
