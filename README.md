@@ -50,6 +50,8 @@ screenspeak = ScreenSpeak("/mnt/c/Users/<YOUR USERNAME HERE>/OneDrive/Pictures/S
 
 Replace <YOUR USERNAME HERE> with your actual Windows username.
 
+This path is the Ubuntu WSL path - it may differ to be a regular Windows path to your Screenshots folder; this assumes they are on OneDrive
+
 Step 6: Run the Script
 Finally, run the ScreenSpeak script:
 
