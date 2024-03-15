@@ -7,6 +7,8 @@ import requests
 import subprocess
 from PIL import Image
 from openai import OpenAI
+from langchain_anthropic import ChatAnthropic
+from langchain_core.messages import HumanMessage
 from datetime import datetime
 from dotenv import load_dotenv
 
@@ -26,6 +28,19 @@ class ScreenSpeak:
         self.start_time = datetime.now().timestamp()
         self.last_processed = None
         self.client = OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
+        self.anthropic_client = ChatAnthropic(temperature=0, anthropic_api_key=os.getenv("ANTHROPIC_API_KEY"), model_name="claude-3-opus-20240229")
+
+        # Base directory for all outputs
+        base_output_dir = os.path.join(os.path.dirname(__file__), "LocalScreenSpeakOutputs")
+        # Specific directories for text analysis and screenshots
+        self.text_analysis_output_dir = os.path.join(base_output_dir, "Text Analysis")
+        self.screenshot_output_dir = os.path.join(base_output_dir, "Screenshots")
+        self.audio_transcripts_dir = os.path.join(base_output_dir, "Audio Transcripts")
+
+        # Create the directories if they don't exist
+        os.makedirs(self.text_analysis_output_dir, exist_ok=True)
+        os.makedirs(self.screenshot_output_dir, exist_ok=True)
+        os.makedirs(self.audio_transcripts_dir, exist_ok=True)
 
         # Setting up local directories for text and audio output
         self.output_dir = os.path.abspath(output_dir)
@@ -121,6 +136,39 @@ class ScreenSpeak:
             max_tokens=500,
         )
         return result.choices[0].message.content
+    
+    def _generate_script_anthropic(self, screenshot_path):
+        """
+        Generates a voice-over script for the screenshot using Anthropic's Claude-3 model.
+
+        :param screenshot_path: Path to the screenshot file.
+        :return: Generated script as a string.
+        """
+        with Image.open(screenshot_path) as img:
+            img = img.convert("RGB")
+            buffered = io.BytesIO()
+            img.save(buffered, format="JPEG", quality=85)
+            base64_image = base64.b64encode(buffered.getvalue()).decode('utf-8')
+
+        # Prepare the message for Anthropic's API using HumanMessage
+        messages = [
+            HumanMessage(
+                content=[
+                    {
+                        "type": "image_url",
+                        "image_url": {
+                            "url": f"data:image/jpeg;base64,{base64_image}",
+                        },
+                    },
+                    {"type": "text", "text": "This is a screenshot. Based on the image please generate the text to describe what you see. Try your best."},
+                ]
+            )
+        ]
+
+        # Assuming `self.anthropic_client` is already initialized and configured
+        response = self.anthropic_client.invoke(messages)
+
+        return response    
 
     def _synthesize_speech(self, script):
         """
