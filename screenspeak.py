@@ -111,11 +111,15 @@ class ScreenSpeak:
 
     def _save_text_analysis(self, synthesized_description, screenshot_path):
         """
-        Saves the synthesized text analysis to a file in the "LocalScreenSpeakOutputs/Text Analysis" folder.
+        Saves the synthesized text analysis to a file in the "LocalScreenSpeakOutputs/Text Analysis" folder,
+        using a filename generated from the description.
     
         :param synthesized_description: The synthesized description to save, which should be a string.
         :param screenshot_path: The path of the original screenshot, used to derive the name of the text file.
         """
+        # Generate a filename based on the synthesized description
+        filename = self._generate_file_name(synthesized_description)
+        
         # Specify the new base directory relative to the current script location
         base_dir = os.path.dirname(__file__)  # Gets the directory where the script is located
         
@@ -125,19 +129,53 @@ class ScreenSpeak:
         if not os.path.exists(text_analysis_dir):
             os.makedirs(text_analysis_dir)
         
-        base_name = os.path.basename(screenshot_path)
-        text_file_name = os.path.splitext(base_name)[0] + ".txt"
-        text_file_path = os.path.join(text_analysis_dir, text_file_name)
+        # Define the full path for the text file within the "Text Analysis" directory
+        text_file_path = os.path.join(text_analysis_dir, f"{filename}.txt")
         
-        if isinstance(synthesized_description, str):
-            content_to_write = synthesized_description
+        # Check and handle if synthesized_description is not a string
+        if not isinstance(synthesized_description, str):
+            # Assuming synthesized_description has a property 'content' containing the text
+            content_to_write = synthesized_description.content
         else:
-            content_to_write = synthesized_description.content  # Adjust based on actual object structure if necessary
+            content_to_write = synthesized_description
         
+        # Write the synthesized description to the text file
         with open(text_file_path, 'w', encoding='utf-8') as file:
             file.write(content_to_write)
         
         print(f"Saved text analysis to {text_file_path}")
+
+    def _generate_file_name(self, description):
+        """
+        Generates a file name based on the provided description using ChatGPT.
+
+        :param description: The script or summary of the script.
+        :return: A suitable file name as a string.
+        """
+        messages = [{
+            "role": "system",
+            "content": "You are a file name generator. Using a brief description of a screenshot, you are going to create appropriate file names."
+        }, {
+            "role": "user",
+            "content": f"Generate a concise, descriptive file name based on the following summary:\n{description}"
+        }]
+
+        result = self.client.chat.completions.create(
+            model="gpt-4-0125-preview",  # Ensure you're using a valid model identifier
+            messages=messages,
+            max_tokens=100,
+            temperature=0.7
+        )
+
+        if result.choices and len(result.choices) > 0:
+            file_name = result.choices[0].message.content.strip()
+        else:
+            file_name = "default_filename"
+
+        # Replace any illegal characters in file name
+        file_name = "".join([c for c in file_name if c.isalnum() or c in [' ', '_', '-']]).rstrip()
+
+        return file_name
 
     def _generate_script(self, screenshot_path):
         """
