@@ -111,31 +111,29 @@ class ScreenSpeak:
 
     def _save_text_analysis(self, synthesized_description, screenshot_path):
         """
-        Saves the synthesized text analysis to a file in the "Text Analysis" folder.
+        Saves the synthesized text analysis to a file in the "LocalScreenSpeakOutputs/Text Analysis" folder.
     
         :param synthesized_description: The synthesized description to save, which should be a string.
         :param screenshot_path: The path of the original screenshot, used to derive the name of the text file.
         """
-        # Create the "Text Analysis" directory if it doesn't exist
-        text_analysis_dir = os.path.join(self.screenshot_dir, "Text Analysis")
+        # Specify the new base directory relative to the current script location
+        base_dir = os.path.dirname(__file__)  # Gets the directory where the script is located
+        
+        # Adjust the path to point to "LocalScreenSpeakOutputs/Text Analysis" relative to the script's location
+        text_analysis_dir = os.path.join(base_dir, "LocalScreenSpeakOutputs", "Text Analysis")
+        
         if not os.path.exists(text_analysis_dir):
             os.makedirs(text_analysis_dir)
         
-        # Extract the base name of the screenshot and replace its extension with .txt for the text file
         base_name = os.path.basename(screenshot_path)
         text_file_name = os.path.splitext(base_name)[0] + ".txt"
-        
-        # Define the full path for the text file within the "Text Analysis" directory
         text_file_path = os.path.join(text_analysis_dir, text_file_name)
         
-        # Ensure synthesized_description is a string before writing
         if isinstance(synthesized_description, str):
             content_to_write = synthesized_description
         else:
-            # Extracting text from the ChatCompletionMessage if necessary
-            content_to_write = synthesized_description.content  # Adjust this line based on how you extract the string content
-    
-        # Write the synthesized description to the text file
+            content_to_write = synthesized_description.content  # Adjust based on actual object structure if necessary
+        
         with open(text_file_path, 'w', encoding='utf-8') as file:
             file.write(content_to_write)
         
