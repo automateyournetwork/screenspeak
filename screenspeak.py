@@ -27,8 +27,16 @@ class ScreenSpeak:
         self.poll_interval = poll_interval
         self.start_time = datetime.now().timestamp()
         self.last_processed = None
-        self.client = OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
-        self.anthropic_client = ChatAnthropic(temperature=0, anthropic_api_key=os.getenv("ANTHROPIC_API_KEY"), model_name="claude-3-opus-20240229")
+        self.client = None
+        self.anthropic_client = None
+
+        openai_api_key = os.getenv('OPENAI_API_KEY')
+        if openai_api_key:
+            self.client = OpenAI(api_key=openai_api_key)
+        
+        anthropic_api_key = os.getenv("ANTHROPIC_API_KEY")
+        if anthropic_api_key:
+            self.anthropic_client = ChatAnthropic(temperature=0, anthropic_api_key=anthropic_api_key, model_name="claude-3-opus-20240229")
 
         # Base directory for all outputs
         base_output_dir = os.path.join(os.path.dirname(__file__), "LocalScreenSpeakOutputs")
@@ -81,28 +89,41 @@ class ScreenSpeak:
     def _process_screenshot(self, screenshot_path):
         print(f"Processing screenshot: {screenshot_path}")
         try:
-            # Generate scripts using both models
-            chatgpt_description = self._generate_script(screenshot_path)
-            anthropic_description = self._generate_script_anthropic(screenshot_path)
+            chatgpt_description, anthropic_description, synthesized_summary = None, None, None
+            file_name_base = None
 
-            # Generate a synthesized summary from the two descriptions
-            synthesized_summary = self._generate_synthesized_summary(chatgpt_description, anthropic_description)
+            # Check if OpenAI client is available and generate script
+            if self.client:
+                chatgpt_description = self._generate_script(screenshot_path)  # Ensure this method exists and is correctly implemented
+                file_name_base = self._generate_file_name(chatgpt_description)  # Generates a base file name based on the description
+                self._save_text_analysis(chatgpt_description, file_name_base + "_chatgpt")
+            else: 
+                print("no openai key")
 
-            # Base name for files, could be based on either description or a timestamp
-            file_name_base = self._generate_file_name(synthesized_summary)
+            # Check if Anthropic client is available and generate script
+            if self.anthropic_client:
+                anthropic_description = self._generate_script_anthropic(screenshot_path)  # Ensure this method exists and is correctly implemented
+                file_name_base = self._generate_file_name(anthropic_description)
+                self._save_text_analysis(anthropic_description, file_name_base + "_anthropic")
+            else:
+                print("no anthropic key")
 
-            # Save all descriptions and synthesized summary
-            self._save_text_analysis(chatgpt_description, file_name_base + "_chatgpt")
-            self._save_text_analysis(anthropic_description, file_name_base + "_anthropic")
-            self._save_text_analysis(synthesized_summary, file_name_base + "_synthesized")
+            # If both clients are available, generate a synthesized summary
+            if self.client and self.anthropic_client:
+                synthesized_summary = self._generate_synthesized_summary(chatgpt_description, anthropic_description)
+                self._save_text_analysis(synthesized_summary, file_name_base + "_synthesized")
 
             # Copy the original screenshot once
             self._copy_screenshot(screenshot_path, file_name_base)
 
-            # Synthesize and save audio for the synthesized summary
-            synthesized_audio = self._synthesize_speech(synthesized_summary)
-            if synthesized_audio:
-                self._save_and_play_audio(synthesized_audio, file_name_base + "_synthesized")
+            # Determine which description to use for audio synthesis based on availability
+            final_description = synthesized_summary if synthesized_summary else (chatgpt_description if chatgpt_description else anthropic_description)
+
+            # Synthesize and save audio for the chosen description
+            if final_description:
+                synthesized_audio = self._synthesize_speech(final_description)
+                if synthesized_audio:
+                    self._save_and_play_audio(synthesized_audio, file_name_base + ("_synthesized" if synthesized_summary else ""))
         except Exception as e:
             print(f"Error processing screenshot: {e}")
 

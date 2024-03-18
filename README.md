@@ -13,7 +13,10 @@ Navigate to the cloned repository folder and create a .env file. Add your OpenAI
 
 ```console
 OPENAI_API_KEY=<your api key here from platform.openai.com>
+ANTHROPIC_API_KEY=<your api key here from console.anthropic.com>
 ```
+
+The code will work with either or both keys set; if both keys are set a composite answer taking both original answers is provided (best results)
 
 Step 3: Create a Python Virtual Environment
 Set up a virtual environment to manage the project's dependencies independently of other Python projects on your system.
