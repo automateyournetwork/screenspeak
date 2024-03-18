@@ -155,7 +155,7 @@ class ScreenSpeak:
         prompt_messages = [{
             "role": "user",
             "content": [
-                "This is a screenshot. Based on the image please generate the text to describe what you see. Try your best.",
+                "You are currently analyzing a digital screenshot. Your task is to meticulously examine the visual elements and context presented in this image. Consider all visible details, including text, symbols, interface elements, and any discernible background features. Your goal is to generate a comprehensive description of the screenshot's contents, providing insights into its possible purpose, the actions it depicts or prompts, and any underlying context or information it conveys. Please employ your analytical capabilities to deduce and articulate the significance of the screenshot, offering interpretations or explanations that could assist a user in understanding its relevance, potential applications, or implications. Approach this task with attention to detail and a focus on delivering clear, informative, and useful analysis.",
                 {"image": base64_image, "resize": 768}
             ],
         }]
@@ -189,7 +189,7 @@ class ScreenSpeak:
                             "url": f"data:image/jpeg;base64,{base64_image}",
                         },
                     },
-                    {"type": "text", "text": "This is a screenshot. Based on the image please generate the text to describe what you see. Try your best."},
+                    {"type": "text", "text": "You are currently analyzing a digital screenshot. Your task is to meticulously examine the visual elements and context presented in this image. Consider all visible details, including text, symbols, interface elements, and any discernible background features. Your goal is to generate a comprehensive description of the screenshot's contents, providing insights into its possible purpose, the actions it depicts or prompts, and any underlying context or information it conveys. Please employ your analytical capabilities to deduce and articulate the significance of the screenshot, offering interpretations or explanations that could assist a user in understanding its relevance, potential applications, or implications. Approach this task with attention to detail and a focus on delivering clear, informative, and useful analysis."},
                 ]
             )
         ]
