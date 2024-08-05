@@ -3,32 +3,23 @@ import os
 import time
 import base64
 import shutil
-import requests
-import subprocess
 from PIL import Image
-from openai import OpenAI
-from langchain_anthropic import ChatAnthropic
-from langchain_core.messages import HumanMessage
 from datetime import datetime
-from dotenv import load_dotenv
+import ollama
 
 class ScreenSpeak:
-    def __init__(self, screenshot_dir, voice_model="alloy", poll_interval=10, output_dir="ScreenSpeakOutputs"):
+    def __init__(self, screenshot_dir, poll_interval=10, output_dir="ScreenSpeakOutputs"):
         """
-        Initializes the ScreenSpeak with the directory to monitor, voice model, and polling interval.
+        Initializes the ScreenSpeak with the directory to monitor and polling interval.
 
         :param screenshot_dir: Directory to monitor for new screenshots.
-        :param voice_model: Voice model to use for speech synthesis.
         :param poll_interval: Time in seconds between directory checks for new screenshots.
         :param output_dir: Directory to save text analysis and audio files locally.
         """
         self.screenshot_dir = screenshot_dir
-        self.voice_model = voice_model
         self.poll_interval = poll_interval
         self.start_time = datetime.now().timestamp()
         self.last_processed = None
-        self.client = OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
-        self.anthropic_client = ChatAnthropic(temperature=0, anthropic_api_key=os.getenv("ANTHROPIC_API_KEY"), model_name="claude-3-opus-20240229")
 
         # Base directory for all outputs
         base_output_dir = os.path.join(os.path.dirname(__file__), "LocalScreenSpeakOutputs")
@@ -81,51 +72,46 @@ class ScreenSpeak:
     def _process_screenshot(self, screenshot_path):
         print(f"Processing screenshot: {screenshot_path}")
         try:
-            # Generate scripts using both models
-            chatgpt_description = self._generate_script(screenshot_path)
-            anthropic_description = self._generate_script_anthropic(screenshot_path)
+            # Generate script using the Llava model from Ollama
+            description = self._generate_script(screenshot_path)
 
-            # Generate a synthesized summary from the two descriptions
-            synthesized_summary = self._generate_synthesized_summary(chatgpt_description, anthropic_description)
+            # Generate a file name based on the description
+            file_name_base = self._generate_file_name(description)
 
-            # Base name for files, could be based on either description or a timestamp
-            file_name_base = self._generate_file_name(synthesized_summary)
+            # Save the description
+            self._save_text_analysis(description, file_name_base + "_llava")
 
-            # Save all descriptions and synthesized summary
-            self._save_text_analysis(chatgpt_description, file_name_base + "_chatgpt")
-            self._save_text_analysis(anthropic_description, file_name_base + "_anthropic")
-            self._save_text_analysis(synthesized_summary, file_name_base + "_synthesized")
-
-            # Copy the original screenshot once
+            # Copy the original screenshot
             self._copy_screenshot(screenshot_path, file_name_base)
-
-            # Synthesize and save audio for the synthesized summary
-            synthesized_audio = self._synthesize_speech(synthesized_summary)
-            if synthesized_audio:
-                self._save_and_play_audio(synthesized_audio, file_name_base + "_synthesized")
         except Exception as e:
             print(f"Error processing screenshot: {e}")
 
-    def _generate_synthesized_summary(self, chatgpt_description, anthropic_description):
+    def _generate_script(self, screenshot_path):
         """
-        Generates a synthesized summary by considering both the ChatGPT and Anthropic descriptions.
+        Generates a voice-over script for the screenshot using the Llava model from Ollama.
 
-        :param chatgpt_description: Description from ChatGPT.
-        :param anthropic_description: Description from Anthropic.
-        :return: A synthesized "best" summary considering both descriptions.
+        :param screenshot_path: Path to the screenshot file.
+        :return: Generated script as a string.
         """
-        prompt = f"Please consider the following two image analysis answers and create a combined, synthesized 'best' answer considering both original answers:\n\nChatGPT's answer:\n{chatgpt_description}\n\nAnthropic's answer:\n{anthropic_description}"
-
-        response = self.client.chat.completions.create(
-            model="gpt-4-0125-preview",  # Use the appropriate model here
-              messages=[
-                {"role": "system", "content": "You are an expert in taking two answers and combining them into the best answer possible. Consider both answers equally and provide me with the best composite snythetic answer."},
-                {"role": "user", "content": prompt},
-            ],
-            temperature=0.7,
-        ) 
-
-        return response.choices[0].message.content
+        with Image.open(screenshot_path) as img:
+            img = img.convert("RGB")
+            buffered = io.BytesIO()
+            img.save(buffered, format="JPEG", quality=85)
+            base64_image = base64.b64encode(buffered.getvalue()).decode('utf-8')
+        
+        # Call the Ollama API to generate the description
+        res = ollama.chat(
+            model="llava",
+            messages=[
+                {
+                    'role': 'user',
+                    'content': 'Describe this from the Selector.ai dashboard. Please pay attention to the text in the image and help provide a network analysis of the screenshot to help a user understand what they are looking at:',
+                    'images': [base64_image]
+                }
+            ]
+        )
+        
+        return res['message']['content']
 
     def _copy_screenshot(self, screenshot_path, file_name_base):
         """
@@ -139,162 +125,32 @@ class ScreenSpeak:
         shutil.copy2(screenshot_path, destination_path)
         print(f"Copied screenshot to {destination_path}")
 
-    def _generate_script(self, screenshot_path):
-        """
-        Generates a voice-over script for the screenshot using OpenAI's GPT model.
-
-        :param screenshot_path: Path to the screenshot file.
-        :return: Generated script as a string.
-        """
-        with Image.open(screenshot_path) as img:
-            img = img.convert("RGB")
-            buffered = io.BytesIO()
-            img.save(buffered, format="JPEG", quality=85)
-            base64_image = base64.b64encode(buffered.getvalue()).decode('utf-8')
-        
-        prompt_messages = [{
-            "role": "user",
-            "content": [
-                "You are currently analyzing a digital screenshot. Your task is to meticulously examine the visual elements and context presented in this image. Consider all visible details, including text, symbols, interface elements, and any discernible background features. Your goal is to generate a comprehensive description of the screenshot's contents, providing insights into its possible purpose, the actions it depicts or prompts, and any underlying context or information it conveys. Please employ your analytical capabilities to deduce and articulate the significance of the screenshot, offering interpretations or explanations that could assist a user in understanding its relevance, potential applications, or implications. Approach this task with attention to detail and a focus on delivering clear, informative, and useful analysis.",
-                {"image": base64_image, "resize": 768}
-            ],
-        }]
-        result = self.client.chat.completions.create(
-            model="gpt-4-vision-preview",
-            messages=prompt_messages,
-            max_tokens=500,
-        )
-        return result.choices[0].message.content
-    
-    def _generate_script_anthropic(self, screenshot_path):
-        """
-        Generates a voice-over script for the screenshot using Anthropic's Claude-3 model.
-
-        :param screenshot_path: Path to the screenshot file.
-        :return: Generated script as a string.
-        """
-        with Image.open(screenshot_path) as img:
-            img = img.convert("RGB")
-            buffered = io.BytesIO()
-            img.save(buffered, format="JPEG", quality=85)
-            base64_image = base64.b64encode(buffered.getvalue()).decode('utf-8')
-
-        # Prepare the message for Anthropic's API using HumanMessage
-        messages = [
-            HumanMessage(
-                content=[
-                    {
-                        "type": "image_url",
-                        "image_url": {
-                            "url": f"data:image/jpeg;base64,{base64_image}",
-                        },
-                    },
-                    {"type": "text", "text": "You are currently analyzing a digital screenshot. Your task is to meticulously examine the visual elements and context presented in this image. Consider all visible details, including text, symbols, interface elements, and any discernible background features. Your goal is to generate a comprehensive description of the screenshot's contents, providing insights into its possible purpose, the actions it depicts or prompts, and any underlying context or information it conveys. Please employ your analytical capabilities to deduce and articulate the significance of the screenshot, offering interpretations or explanations that could assist a user in understanding its relevance, potential applications, or implications. Approach this task with attention to detail and a focus on delivering clear, informative, and useful analysis."},
-                ]
-            )
-        ]
-
-        # Assuming `self.anthropic_client` is already initialized and configured
-        response = self.anthropic_client.invoke(messages)
-
-        return response    
-
-    def _synthesize_speech(self, script):
-        """
-        Synthesizes speech from the provided script using the specified voice model.
-
-        :param script: Script to synthesize speech from.
-        :return: Binary content of the synthesized speech audio.
-        """
-        print("Synthesizing speech...")
-        response = requests.post(
-            "https://api.openai.com/v1/audio/speech",
-            headers={"Authorization": f"Bearer {os.getenv('OPENAI_API_KEY')}"},
-            json={"model": "tts-1-hd", "input": script, "voice": self.voice_model},
-        )
-        if response.ok:
-            return response.content
-        else:
-            print(f"Error with the audio generation request: {response.text}")
-            return None
-
-    def _save_and_play_audio(self, audio_content, file_name_base):
-        """
-        Saves the synthesized speech audio to a file and plays it, using a name generated by ChatGPT.
-
-        :param audio_content: Binary content of the synthesized speech audio.
-        :param file_name_base: AI-generated base name for the file.
-        """
-        audio_filename = f"{file_name_base}_audio.mp3"
-        audio_file_path = os.path.join(self.audio_transcripts_dir, audio_filename)
-
-        with open(audio_file_path, 'wb') as audio_file:
-            audio_file.write(audio_content)
-        print(f"Saved audio to {audio_file_path}")
-
-        # Play the audio
-        try:
-            subprocess.run(['mpg123', audio_file_path], check=True)
-        except subprocess.CalledProcessError as e:
-            print(f"Error playing audio: {e}")
-
     def _generate_file_name(self, description):
         """
-        Generates a file name based on the provided description using ChatGPT.
+        Generates a file name based on the provided description.
 
         :param description: The script or summary of the script.
         :return: A suitable file name as a string.
         """
-        messages = [{
-            "role": "system",
-            "content": "You are a file name generator. Using a brief description of a screenshot, you are going to create appropriate file names."
-        }, {
-            "role": "user",
-            "content": f"Generate a concise, descriptive file name based on the following summary:\n{description}"
-        }]
-
-        result = self.client.chat.completions.create(
-            model="gpt-4-0125-preview",  # Ensure you're using a valid model identifier
-            messages=messages,
-            max_tokens=100,
-            temperature=0.7
-        )
-
-        if result.choices and len(result.choices) > 0:
-            file_name = result.choices[0].message.content.strip()
-        else:
-            file_name = "default_filename"
-
-        # Replace any illegal characters in file name
-        file_name = "".join([c for c in file_name if c.isalnum() or c in [' ', '_', '-']]).rstrip()
-
+        # Generate a concise, descriptive file name
+        file_name = "".join([c for c in description[:50] if c.isalnum() or c in [' ', '_', '-']]).rstrip()
         return file_name
 
     def _save_text_analysis(self, description, file_name_base):
         """
-        Saves the AI-generated script as a text file, using a name generated by ChatGPT.
+        Saves the AI-generated script as a text file, using a name generated by the Llava model.
 
-        :param description: The script to save. It can be a string or an object that needs to be converted to string.
-        :param file_name_base: Base name for the file, generated by AI.
+        :param description: The script to save.
+        :param file_name_base: Base name for the file.
         """
-        # Generate file name based on description
         text_filename = f"{file_name_base}_analysis.txt"
         text_file_path = os.path.join(self.text_analysis_dir, text_filename)
 
-        # Ensure description is a string before writing
-        if not isinstance(description, str):
-            # Convert description to string if it's not already.
-            # You might need to adapt this line if description is an object with specific fields to extract.
-            description_str = str(description)
-        else:
-            description_str = description
-
         with open(text_file_path, 'w') as file:
-            file.write(description_str)
+            file.write(description)
         print(f"Saved text analysis to {text_file_path}")
 
 if __name__ == "__main__":
-    load_dotenv()
     # Customize the output directory path as needed
     screenspeak = ScreenSpeak("/mnt/c/Users/ptcap/OneDrive/Pictures/Screenshots", output_dir="LocalScreenSpeakOutputs")
     screenspeak.run()
