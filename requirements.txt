@@ -2,4 +2,5 @@ pillow
 requests
 python-dotenv
 openai
-langchain-anthropic -qU
+gtts
+ollama
