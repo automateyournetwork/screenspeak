@@ -1,6 +1,7 @@
 pillow
 requests
 python-dotenv
+langchain_core
 openai
 gtts
 ollama
