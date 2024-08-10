@@ -137,39 +137,6 @@ class ScreenSpeak:
             max_tokens=500,
         )
         return result.choices[0].message.content
-    
-    def _generate_script_anthropic(self, screenshot_path):
-        """
-        Generates a voice-over script for the screenshot using Anthropic's Claude-3 model.
-
-        :param screenshot_path: Path to the screenshot file.
-        :return: Generated script as a string.
-        """
-        with Image.open(screenshot_path) as img:
-            img = img.convert("RGB")
-            buffered = io.BytesIO()
-            img.save(buffered, format="JPEG", quality=85)
-            base64_image = base64.b64encode(buffered.getvalue()).decode('utf-8')
-
-        # Prepare the message for Anthropic's API using HumanMessage
-        messages = [
-            HumanMessage(
-                content=[
-                    {
-                        "type": "image_url",
-                        "image_url": {
-                            "url": f"data:image/jpeg;base64,{base64_image}",
-                        },
-                    },
-                    {"type": "text", "text": "You are currently analyzing a digital screenshot. Your task is to meticulously examine the visual elements and context presented in this image. Consider all visible details, including text, symbols, interface elements, and any discernible background features. Your goal is to generate a comprehensive description of the screenshot's contents, providing insights into its possible purpose, the actions it depicts or prompts, and any underlying context or information it conveys. Please employ your analytical capabilities to deduce and articulate the significance of the screenshot, offering interpretations or explanations that could assist a user in understanding its relevance, potential applications, or implications. Approach this task with attention to detail and a focus on delivering clear, informative, and useful analysis."},
-                ]
-            )
-        ]
-
-        # Assuming `self.anthropic_client` is already initialized and configured
-        response = self.anthropic_client.invoke(messages)
-
-        return response    
 
     def _synthesize_speech(self, script):
         """
