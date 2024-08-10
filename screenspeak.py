@@ -2,7 +2,7 @@ import io
 import os
 import time
 import base64
-import shutil
+import requests
 import subprocess
 from PIL import Image
 from datetime import datetime
@@ -121,17 +121,23 @@ class ScreenSpeak:
 
     def _synthesize_speech(self, script):
         """
-        Synthesizes speech from the provided script.
+        Synthesizes speech from the provided script using the specified voice model.
 
         :param script: Script to synthesize speech from.
         :return: Binary content of the synthesized speech audio.
         """
         print("Synthesizing speech...")
-        # Placeholder for TTS synthesis, integrate with your TTS service
-        # Assuming you have a method for synthesizing speech to audio
-        # Return the binary audio content here
-        # Example:
-        return b"binary_audio_content"
+        response = requests.post(
+            "https://api.openai.com/v1/audio/speech",
+            headers={"Authorization": f"Bearer {os.getenv('OPENAI_API_KEY')}"},
+            json={"model": "tts-1-hd", "input": script, "voice": self.voice_model},
+        )
+        if response.ok:
+            return response.content
+        else:
+            print(f"Error with the audio generation request: {response.text}")
+            return None
+
 
     def _save_and_play_audio(self, audio_content, file_name_base):
         """
