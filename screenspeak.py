@@ -7,7 +7,6 @@ import requests
 import subprocess
 from PIL import Image
 from openai import OpenAI
-from langchain_anthropic import ChatAnthropic
 from langchain_core.messages import HumanMessage
 from datetime import datetime
 from dotenv import load_dotenv
@@ -28,7 +27,6 @@ class ScreenSpeak:
         self.start_time = datetime.now().timestamp()
         self.last_processed = None
         self.client = OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
-        self.anthropic_client = ChatAnthropic(temperature=0, anthropic_api_key=os.getenv("ANTHROPIC_API_KEY"), model_name="claude-3-opus-20240229")
 
         # Base directory for all outputs
         base_output_dir = os.path.join(os.path.dirname(__file__), "LocalScreenSpeakOutputs")
@@ -83,49 +81,22 @@ class ScreenSpeak:
         try:
             # Generate scripts using both models
             chatgpt_description = self._generate_script(screenshot_path)
-            anthropic_description = self._generate_script_anthropic(screenshot_path)
-
-            # Generate a synthesized summary from the two descriptions
-            synthesized_summary = self._generate_synthesized_summary(chatgpt_description, anthropic_description)
 
             # Base name for files, could be based on either description or a timestamp
-            file_name_base = self._generate_file_name(synthesized_summary)
+            file_name_base = self._generate_file_name(chatgpt_description)
 
             # Save all descriptions and synthesized summary
             self._save_text_analysis(chatgpt_description, file_name_base + "_chatgpt")
-            self._save_text_analysis(anthropic_description, file_name_base + "_anthropic")
-            self._save_text_analysis(synthesized_summary, file_name_base + "_synthesized")
 
             # Copy the original screenshot once
             self._copy_screenshot(screenshot_path, file_name_base)
 
             # Synthesize and save audio for the synthesized summary
-            synthesized_audio = self._synthesize_speech(synthesized_summary)
+            synthesized_audio = self._synthesize_speech(chatgpt_description)
             if synthesized_audio:
                 self._save_and_play_audio(synthesized_audio, file_name_base + "_synthesized")
         except Exception as e:
             print(f"Error processing screenshot: {e}")
-
-    def _generate_synthesized_summary(self, chatgpt_description, anthropic_description):
-        """
-        Generates a synthesized summary by considering both the ChatGPT and Anthropic descriptions.
-
-        :param chatgpt_description: Description from ChatGPT.
-        :param anthropic_description: Description from Anthropic.
-        :return: A synthesized "best" summary considering both descriptions.
-        """
-        prompt = f"Please consider the following two image analysis answers and create a combined, synthesized 'best' answer considering both original answers:\n\nChatGPT's answer:\n{chatgpt_description}\n\nAnthropic's answer:\n{anthropic_description}"
-
-        response = self.client.chat.completions.create(
-            model="gpt-4-0125-preview",  # Use the appropriate model here
-              messages=[
-                {"role": "system", "content": "You are an expert in taking two answers and combining them into the best answer possible. Consider both answers equally and provide me with the best composite snythetic answer."},
-                {"role": "user", "content": prompt},
-            ],
-            temperature=0.7,
-        ) 
-
-        return response.choices[0].message.content
 
     def _copy_screenshot(self, screenshot_path, file_name_base):
         """
@@ -155,12 +126,13 @@ class ScreenSpeak:
         prompt_messages = [{
             "role": "user",
             "content": [
-                "You are currently analyzing a digital screenshot. Your task is to meticulously examine the visual elements and context presented in this image. Consider all visible details, including text, symbols, interface elements, and any discernible background features. Your goal is to generate a comprehensive description of the screenshot's contents, providing insights into its possible purpose, the actions it depicts or prompts, and any underlying context or information it conveys. Please employ your analytical capabilities to deduce and articulate the significance of the screenshot, offering interpretations or explanations that could assist a user in understanding its relevance, potential applications, or implications. Approach this task with attention to detail and a focus on delivering clear, informative, and useful analysis.",
+                #"You are currently analyzing a digital screenshot. Your task is to meticulously examine the visual elements and context presented in this image. Consider all visible details, including text, symbols, interface elements, and any discernible background features. Your goal is to generate a comprehensive description of the screenshot's contents, providing insights into its possible purpose, the actions it depicts or prompts, and any underlying context or information it conveys. Please employ your analytical capabilities to deduce and articulate the significance of the screenshot, offering interpretations or explanations that could assist a user in understanding its relevance, potential applications, or implications. Approach this task with attention to detail and a focus on delivering clear, informative, and useful analysis.",
+                "You are currently analyzing a digital screenshot of a dashboard from Selector.AI. Your task is to meticulously examine the visual elements and context presented in this image. Pay close attention to all visible details, including text, symbols, interface elements, and any discernible background features. Focus on any text in the image to identify interface names and functionalities.Your goal is to generate a comprehensive description of the dashboard's contents, providing insights into its possible purpose, the actions it depicts or prompts, and any underlying context or information it conveys. Please use your analytical capabilities to deduce and articulate the significance of the dashboard, offering interpretations or explanations that could assist a user in understanding its relevance, potential applications, or implications.Approach this task with attention to detail and a focus on delivering clear, informative, and useful analysis, acting as a copilot or technical assistant to help decipher the meaning and functionalities of the Selector.AI dashboard.",
                 {"image": base64_image, "resize": 768}
             ],
         }]
         result = self.client.chat.completions.create(
-            model="gpt-4-vision-preview",
+            model="gpt-4o",
             messages=prompt_messages,
             max_tokens=500,
         )
