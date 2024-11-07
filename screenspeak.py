@@ -109,7 +109,7 @@ class ScreenSpeak:
         
         # Call the Ollama API to generate the description
         res = ollama.chat(
-            model="llava",
+            model="llama3.2-vision",
             messages=[
                 {
                     'role': 'user',

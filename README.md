@@ -82,10 +82,10 @@ $ git checkout ollama
 
 Download ollama (ollama.com) for Windows or Linux and install it 
 
-Download (ollama pull llava) the Llava model 
+Download (ollama pull llama3.2-vision) the Llava model 
 
 ```console
-$ ollama pull llava
+$ ollama pull llama3.2-vision
 ```
 
 Start ollama 
