@@ -1,3 +1,5 @@
+
+
 # screenspeak
 AI as a hotkey - Transform your screenshots into real-time audio analysis with chatGPT Vision and Text to Speech
 
@@ -43,10 +45,10 @@ pip install -r requirements.txt
 ```
 
 Step 5: Update Screenshots Folder Path
-Before running the script, update the path to your screenshots folder in the screenspeak.py file. Modify line 17 to match your screenshots directory:
+Before running the script, update the path to your screenshots folder in the `screenspeak.py` file. Modify the line at the bottom of the file (under `if __name__ == "__main__":`) to match your screenshots directory:
 
 ```python
-screenspeak = ScreenSpeak("/mnt/c/Users/<YOUR USERNAME HERE>/OneDrive/Pictures/Screenshots")
+screenspeak = ScreenSpeak("/mnt/c/Users/<YOUR USERNAME HERE>/OneDrive/Pictures/Screenshots", output_dir="LocalScreenSpeakOutputs")
 ```
 
 Replace <YOUR USERNAME HERE> with your actual Windows username.
@@ -121,10 +123,10 @@ pip install -r requirements.txt
 ```
 
 Step 5: Update Screenshots Folder Path
-Before running the script, update the path to your screenshots folder in the screenspeak.py file. Modify line 17 to match your screenshots directory:
+Before running the script, update the path to your screenshots folder in the `screenspeak.py` file. Modify the line at the bottom of the file (under `if __name__ == "__main__":`) to match your screenshots directory:
 
 ```python
-screenspeak = ScreenSpeak("/mnt/c/Users/<YOUR USERNAME HERE>/OneDrive/Pictures/Screenshots")
+screenspeak = ScreenSpeak("/mnt/c/Users/<YOUR USERNAME HERE>/OneDrive/Pictures/Screenshots", output_dir="LocalScreenSpeakOutputs")
 ```
 
 Replace <YOUR USERNAME HERE> with your actual Windows username.
